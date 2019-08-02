@@ -33,40 +33,7 @@ func GetSessionOptions(c *Config) (*session.Options, error) {
 		return nil, err
 	}
 
-	// Call Get to check for credential provider. If nothing found, we'll get an
-	// error, and we can present it nicely to the user
-	cp, err := creds.Get()
-	if err != nil {
-		if IsAWSErr(err, "NoCredentialProviders", "") {
-			// If a profile wasn't specified, the session may still be able to resolve credentials from shared config.
-			if c.Profile == "" {
-				sess, err := session.NewSession()
-				if err != nil {
-					return nil, errors.New(`No valid credential sources found for AWS Provider.
-	Please see https://terraform.io/docs/providers/aws/index.html for more information on
-	providing credentials for the AWS Provider`)
-				}
-				_, err = sess.Config.Credentials.Get()
-				if err != nil {
-					return nil, errors.New(`No valid credential sources found for AWS Provider.
-	Please see https://terraform.io/docs/providers/aws/index.html for more information on
-	providing credentials for the AWS Provider`)
-				}
-				log.Printf("[INFO] Using session-derived AWS Auth")
-				options.Config.Credentials = sess.Config.Credentials
-			} else {
-				log.Printf("[INFO] AWS Auth using Profile: %q", c.Profile)
-				options.Profile = c.Profile
-				options.SharedConfigState = session.SharedConfigEnable
-			}
-		} else {
-			return nil, fmt.Errorf("Error loading credentials for AWS Provider: %s", err)
-		}
-	} else {
-		// add the validated credentials to the session options
-		log.Printf("[INFO] AWS Auth provider used: %q", cp.ProviderName)
-		options.Config.Credentials = creds
-	}
+	options.Config.Credentials = creds
 
 	if c.Insecure {
 		transport := options.Config.HTTPClient.Transport.(*http.Transport)
@@ -150,6 +117,14 @@ func GetSession(c *Config) (*session.Session, error) {
 func GetSessionWithAccountIDAndPartition(c *Config) (*session.Session, string, string, error) {
 	sess, err := GetSession(c)
 
+	/* session testing (can we mock?)
+	Simple Get Session test from ARN
+	Simple Get Session test with All skips in Config to get session and partition
+	Test for Creds validation
+	Test for Requesting Account ID
+	Test for bad config
+	*/
+
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -180,15 +155,14 @@ func GetSessionWithAccountIDAndPartition(c *Config) (*session.Session, string, s
 		}
 
 		accountID, partition, err := GetAccountIDAndPartition(iamClient, stsClient, credentialsProviderName)
-
-		if err == nil {
-			return sess, accountID, partition, nil
+		if err != nil {
+			return nil, "", "", fmt.Errorf(
+				`AWS account ID not previously found and failed retrieving via all available methods.
+				See https://www.terraform.io/docs/providers/aws/index.html#skip_requesting_account_id for workaround and implications.
+				Errors: %s`, err)
 		}
 
-		return nil, "", "", fmt.Errorf(
-			"AWS account ID not previously found and failed retrieving via all available methods. "+
-				"See https://www.terraform.io/docs/providers/aws/index.html#skip_requesting_account_id for workaround and implications. "+
-				"Errors: %s", err)
+		return sess, accountID, partition, nil
 	}
 
 	var partition string

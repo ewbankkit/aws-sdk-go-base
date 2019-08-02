@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 )
 
+// GetAccountIDAndPartition loads the AWS AccountID and Partition associated with the authenticated client
 func GetAccountIDAndPartition(iamconn *iam.IAM, stsconn *sts.STS, authProviderName string) (string, string, error) {
 	var accountID, partition string
 	var err, errors error
@@ -249,6 +250,10 @@ func GetCredentials(c *Config) (*awsCredentials.Credentials, error) {
 
 	log.Printf("[INFO] AWS Auth provider used: %q", cp.ProviderName)
 
+	/* TODO [nywilken] determine if we need to persist any custom endpoints for the assumeRoleSession
+	This makes a call to the AWS do we need to copy the Endpoint Settings?
+	Or is that not the case when trying to assume a role?
+	*/
 	awsConfig := &aws.Config{
 		Credentials: creds,
 		Region:      aws.String(c.Region),
